@@ -5,6 +5,7 @@ import { WebGPURenderer } from 'three/webgpu';
 import { Maze3D } from './maze';
 // @ts-ignore
 import * as RAPIER from '@dimforge/rapier3d';
+import Stats from 'stats.js';
 
 async function init() {
   // --- UI Setup ---
@@ -220,6 +221,24 @@ async function init() {
     updateZoom(newZoom);
   }, { passive: false });
 
+  // --- Stats.js Setup ---
+  const stats = new Stats();
+  stats.showPanel(0); // 0: fps, 1: ms, 2: mb, 3+: custom
+  stats.dom.style.position = 'absolute';
+  stats.dom.style.top = '2rem';
+  stats.dom.style.right = '2rem';
+  stats.dom.style.left = 'auto'; // Reset default left
+  stats.dom.style.display = 'none';
+  document.body.appendChild(stats.dom);
+
+  // --- Debug Toggle ---
+  window.addEventListener('keydown', (e) => {
+    if (e.key.toLowerCase() === 'd') {
+      const isHidden = stats.dom.style.display === 'none';
+      stats.dom.style.display = isHidden ? 'block' : 'none';
+    }
+  });
+
   // --- Animation Loop ---
   function animate() {
     requestAnimationFrame(animate);
@@ -241,6 +260,7 @@ async function init() {
     ballMesh.quaternion.set(ballRot.x, ballRot.y, ballRot.z, ballRot.w);
 
     renderer.render(scene, camera);
+    stats.update();
   }
 
   window.addEventListener('resize', () => {

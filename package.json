@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "devDependencies": {
+    "@types/stats.js": "^0.17.4",
     "@types/three": "^0.184.1",
     "esbuild": "^0.28.0",
     "rollup": "^4.60.3",
@@ -19,6 +20,7 @@
   },
   "dependencies": {
     "@dimforge/rapier3d": "^0.19.3",
+    "stats.js": "^0.17.0",
     "three": "^0.184.0"
   }
 }
