@@ -200,22 +200,6 @@ async function init() {
     // 1. Raycast for transparency (Ball obstruction)
     const direction = new THREE.Vector3().subVectors(ballMesh.position, camera.position).normalize();
     raycaster.set(camera.position, direction);
-
-    // 3. Camera Auto-Follow
-    // If the ball is moving towards a face that's hidden or far, gently orbit
-    /*const ballPos = ballMesh.position.clone();
-    const ballDist = ballPos.length();
-    if (ballDist > 1) { // Only follow if ball isn't at the very center
-      const idealCameraDir = ballPos.clone().normalize();
-      const currentCameraDir = new THREE.Vector3().subVectors(camera.position, controls.target).normalize();
-      
-      // If the angle between ball and camera is too large, nudge the camera
-      if (idealCameraDir.angleTo(currentCameraDir) > Math.PI / 2.5) {
-        const followSpeed = 0.005;
-        const targetPos = idealCameraDir.multiplyScalar(camera.position.length());
-        camera.position.lerp(targetPos, followSpeed);
-      }
-    }*/
   }
 
   // Sync zoom slider with controls
