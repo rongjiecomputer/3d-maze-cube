@@ -92,27 +92,16 @@ async function init() {
         const posZ = offset + z * cellSize;
 
         // Right wall (+x)
-        if (cell.walls.right) {
+        if (cell.walls.right && x < mazeSize - 1) {
           addWall(posX + cellSize/2, posY, posZ, [wallThickness, cellSize, cellSize]);
         }
         // Top wall (+y)
-        if (cell.walls.top) {
+        if (cell.walls.top && y < mazeSize - 1) {
           addWall(posX, posY + cellSize/2, posZ, [cellSize, wallThickness, cellSize]);
         }
         // Front wall (+z)
-        if (cell.walls.front) {
+        if (cell.walls.front && z < mazeSize - 1) {
           addWall(posX, posY, posZ + cellSize/2, [cellSize, cellSize, wallThickness]);
-        }
-        
-        // Handle negative boundaries
-        if (x === 0 && cell.walls.left) {
-          addWall(posX - cellSize/2, posY, posZ, [wallThickness, cellSize, cellSize]);
-        }
-        if (y === 0 && cell.walls.bottom) {
-          addWall(posX, posY - cellSize/2, posZ, [cellSize, wallThickness, cellSize]);
-        }
-        if (z === 0 && cell.walls.back) {
-          addWall(posX, posY, posZ - cellSize/2, [cellSize, cellSize, wallThickness]);
         }
       });
     });
