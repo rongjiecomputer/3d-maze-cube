@@ -13,8 +13,15 @@ async function init() {
     <div class="ui">
       <h1>3D MAZE CUBE</h1>
       <p>WEBGPU POWERED PHYSICS MAZE</p>
+      
+      <div class="controls">
+        <div class="control-item">
+          <label for="zoomRange">ZOOM</label>
+          <input type="range" id="zoomRange" min="5" max="25" step="0.1" value="12">
+        </div>
+      </div>
     </div>
-    <div class="instructions">DRAG TO ROTATE CUBE</div>
+    <div class="instructions">DRAG TO ROTATE • SCROLL TO ZOOM</div>
   `;
 
   // --- Rapier Physics Setup ---
@@ -178,6 +185,38 @@ async function init() {
   window.addEventListener('mouseup', () => {
     isDragging = false;
   });
+
+  // --- Zoom Logic ---
+  const zoomRange = document.querySelector<HTMLInputElement>('#zoomRange')!;
+  
+  const updateZoom = (value: number) => {
+    camera.position.z = value;
+    zoomRange.value = value.toString();
+  };
+
+  zoomRange.addEventListener('input', (e) => {
+    updateZoom(parseFloat((e.target as HTMLInputElement).value));
+  });
+
+  window.addEventListener('wheel', (e) => {
+    // Prevent browser zoom on pinch (ctrlKey is true for pinch on trackpads)
+    if (e.ctrlKey) {
+      e.preventDefault();
+    }
+    
+    // Normalize delta based on deltaMode (0: pixel, 1: line, 2: page)
+    let delta = e.deltaY;
+    if (e.deltaMode === 1) delta *= 20; // line
+    if (e.deltaMode === 2) delta *= 100; // page
+
+    // Adjust sensitivity: pinch vs scroll
+    const factor = e.ctrlKey ? 0.02 : 0.005;
+    const finalDelta = delta * factor;
+    
+    let newZoom = camera.position.z + finalDelta;
+    newZoom = Math.max(5, Math.min(25, newZoom));
+    updateZoom(newZoom);
+  }, { passive: false });
 
   // --- Animation Loop ---
   function animate() {
