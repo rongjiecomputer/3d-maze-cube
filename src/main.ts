@@ -30,7 +30,7 @@ async function init() {
     // @ts-ignore
     await RAPIER.init();
   }
-  const gravity = { x: 0.0, y: -9.81, z: 0.0 };
+  const gravity = { x: 0.0, y: -20.0, z: 0.0 };
   // @ts-ignore
   const world = new RAPIER.World(gravity);
 
@@ -155,7 +155,9 @@ async function init() {
     .setTranslation(offset, offset, offset)
     .setCanSleep(false);
   const ballBody = world.createRigidBody(ballBodyDesc);
-  const ballColliderDesc = RAPIER.ColliderDesc.ball(ballRadius);
+  const ballColliderDesc = RAPIER.ColliderDesc.ball(ballRadius)
+    .setRestitution(0.0)
+    .setRestitutionCombineRule(RAPIER.CoefficientCombineRule.Min);
   world.createCollider(ballColliderDesc, ballBody);
 
   // --- Interaction ---
