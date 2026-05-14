@@ -6,6 +6,7 @@ import { HollowMaze3D } from './maze';
 // @ts-ignore
 import * as RAPIER from '@dimforge/rapier3d';
 import Stats from 'stats.js';
+import { TrackballControls } from 'three/examples/jsm/controls/TrackballControls.js';
 
 async function init() {
   // --- UI Setup ---
@@ -161,39 +162,24 @@ async function init() {
     .setRestitutionCombineRule(RAPIER.CoefficientCombineRule.Min);
   world.createCollider(ballColliderDesc, ballBody);
 
-  // --- Interaction ---
-  let isDragging = false;
-  let previousMouseX = 0;
-  let previousMouseY = 0;
-  const rotation = new THREE.Euler(0, 0, 0);
+  // --- Interaction (Virtual Trackball) ---
+  const proxyCamera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+  proxyCamera.position.set(0, 0, 12);
+  
+  const controls = new TrackballControls(proxyCamera, renderer.domElement);
+  controls.rotateSpeed = 4.0;
+  controls.zoomSpeed = 1.2;
+  controls.panSpeed = 0.8;
+  controls.noZoom = false;
+  controls.noPan = true;
+  controls.staticMoving = true;
+  controls.dynamicDampingFactor = 0.3;
 
-  window.addEventListener('mousedown', (e) => {
-    isDragging = true;
-    previousMouseX = e.clientX;
-    previousMouseY = e.clientY;
-  });
-
-  window.addEventListener('mousemove', (e) => {
-    if (!isDragging) return;
-    const deltaX = e.clientX - previousMouseX;
-    const deltaY = e.clientY - previousMouseY;
-
-    rotation.y += deltaX * 0.005;
-    rotation.x += deltaY * 0.005;
-
-    previousMouseX = e.clientX;
-    previousMouseY = e.clientY;
-  });
-
-  window.addEventListener('mouseup', () => {
-    isDragging = false;
-  });
-
-  // --- Zoom Logic ---
+  // Sync zoom slider with controls
   const zoomRange = document.querySelector<HTMLInputElement>('#zoomRange')!;
   
   const updateZoom = (value: number) => {
-    camera.position.z = value;
+    proxyCamera.position.normalize().multiplyScalar(value);
     zoomRange.value = value.toString();
   };
 
@@ -201,24 +187,13 @@ async function init() {
     updateZoom(parseFloat((e.target as HTMLInputElement).value));
   });
 
+  // Track initial rotation state if needed, but TrackballControls handles it.
+
   window.addEventListener('wheel', (e) => {
     // Prevent browser zoom on pinch (ctrlKey is true for pinch on trackpads)
     if (e.ctrlKey) {
       e.preventDefault();
     }
-    
-    // Normalize delta based on deltaMode (0: pixel, 1: line, 2: page)
-    let delta = e.deltaY;
-    if (e.deltaMode === 1) delta *= 20; // line
-    if (e.deltaMode === 2) delta *= 100; // page
-
-    // Adjust sensitivity: pinch vs scroll
-    const factor = e.ctrlKey ? 0.02 : 0.005;
-    const finalDelta = delta * factor;
-    
-    let newZoom = camera.position.z + finalDelta;
-    newZoom = Math.max(5, Math.min(25, newZoom));
-    updateZoom(newZoom);
   }, { passive: false });
 
   // --- Stats.js Setup ---
@@ -243,9 +218,21 @@ async function init() {
   function animate() {
     requestAnimationFrame(animate);
 
-    // Update Maze Rotation
-    const targetQuaternion = new THREE.Quaternion().setFromEuler(rotation);
-    mazeGroup.quaternion.slerp(targetQuaternion, 0.1);
+    // Update Controls
+    controls.update();
+
+    // Update Maze Rotation from Proxy Camera
+    // We want the maze to rotate in the opposite direction of the camera movement
+    // so it feels like we are rotating the object itself.
+    const rotationMatrix = new THREE.Matrix4().makeRotationFromQuaternion(proxyCamera.quaternion);
+    const inverseRotation = rotationMatrix.invert();
+    const targetQuaternion = new THREE.Quaternion().setFromRotationMatrix(inverseRotation);
+    
+    mazeGroup.quaternion.slerp(targetQuaternion, 0.15);
+
+    // Sync Main Camera Zoom with Proxy Camera
+    camera.position.z = proxyCamera.position.length();
+    zoomRange.value = camera.position.z.toFixed(1);
 
     // Sync Rapier Kinematic Body
     mazeBody.setNextKinematicRotation(mazeGroup.quaternion);
