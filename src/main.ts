@@ -162,6 +162,17 @@ async function init() {
     .setRestitutionCombineRule(RAPIER.CoefficientCombineRule.Min);
   world.createCollider(ballColliderDesc, ballBody);
 
+    // --- X-Ray Silhouette ---
+  const ballSilhouetteMat = new THREE.MeshBasicMaterial({ 
+    color: 0x00f2fe, 
+    transparent: true,
+    opacity: 0.5,
+    depthFunc: THREE.GreaterDepth, 
+    depthWrite: false 
+  });
+  const ballSilhouetteMesh = new THREE.Mesh(ballGeo, ballSilhouetteMat);
+  scene.add(ballSilhouetteMesh);
+
   // --- Interaction (Virtual Trackball) ---
   const proxyCamera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
   proxyCamera.position.set(0, 0, 12);
@@ -174,6 +185,31 @@ async function init() {
   controls.noPan = true;
   controls.staticMoving = true;
   controls.dynamicDampingFactor = 0.3;
+
+  // --- Visibility Logic Helpers ---
+  const raycaster = new THREE.Raycaster();
+
+  function updateVisibility() {
+    // 1. Raycast for transparency (Ball obstruction)
+    const direction = new THREE.Vector3().subVectors(ballMesh.position, camera.position).normalize();
+    raycaster.set(camera.position, direction);
+
+    // 3. Camera Auto-Follow
+    // If the ball is moving towards a face that's hidden or far, gently orbit
+    /*const ballPos = ballMesh.position.clone();
+    const ballDist = ballPos.length();
+    if (ballDist > 1) { // Only follow if ball isn't at the very center
+      const idealCameraDir = ballPos.clone().normalize();
+      const currentCameraDir = new THREE.Vector3().subVectors(camera.position, controls.target).normalize();
+      
+      // If the angle between ball and camera is too large, nudge the camera
+      if (idealCameraDir.angleTo(currentCameraDir) > Math.PI / 2.5) {
+        const followSpeed = 0.005;
+        const targetPos = idealCameraDir.multiplyScalar(camera.position.length());
+        camera.position.lerp(targetPos, followSpeed);
+      }
+    }*/
+  }
 
   // Sync zoom slider with controls
   const zoomRange = document.querySelector<HTMLInputElement>('#zoomRange')!;
@@ -245,6 +281,12 @@ async function init() {
     const ballRot = ballBody.rotation();
     ballMesh.position.set(ballPos.x, ballPos.y, ballPos.z);
     ballMesh.quaternion.set(ballRot.x, ballRot.y, ballRot.z, ballRot.w);
+
+    // Sync Silhouette
+    ballSilhouetteMesh.position.copy(ballMesh.position);
+
+    // Visibility Tricks
+    updateVisibility();
 
     renderer.render(scene, camera);
     stats.update();
