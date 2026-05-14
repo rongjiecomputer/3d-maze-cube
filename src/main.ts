@@ -155,9 +155,12 @@ async function init() {
 
   const ballBodyDesc = RAPIER.RigidBodyDesc.dynamic()
     .setTranslation(offset, offset, offset)
-    .setCanSleep(false);
+    .setCanSleep(false)
+    .setLinearDamping(0.5)
+    .setAngularDamping(0.5);
   const ballBody = world.createRigidBody(ballBodyDesc);
   const ballColliderDesc = RAPIER.ColliderDesc.ball(ballRadius)
+    .setDensity(5.0)
     .setRestitution(0.0)
     .setRestitutionCombineRule(RAPIER.CoefficientCombineRule.Min);
   world.createCollider(ballColliderDesc, ballBody);
