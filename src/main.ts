@@ -32,7 +32,7 @@ async function init() {
     // @ts-ignore
     await RAPIER.init();
   }
-  const gravity = { x: 0.0, y: -20.0, z: 0.0 };
+  const gravity = { x: 0.0, y: -9.81, z: 0.0 };
   // @ts-ignore
   const world = new RAPIER.World(gravity);
 
