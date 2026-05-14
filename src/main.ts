@@ -6,11 +6,18 @@ import { HollowMaze3D } from './maze';
 // @ts-ignore
 import * as RAPIER from '@dimforge/rapier3d';
 import Stats from 'stats.js';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
 async function init() {
   // --- UI Setup ---
   const app = document.querySelector<HTMLDivElement>('#app')!;
   app.innerHTML = `
+    <div id="startOverlay" class="overlay">
+      <h2>3D MAZE CUBE</h2>
+      <button id="startBtn" class="btn-start">START GAME</button>
+      <p class="mobile-hint">DESKTOP: WASD to Tilt • Drag to Orbit<br>MOBILE: Tilt Device to Roll • Swipe to Orbit</p>
+    </div>
+
     <div class="ui">
       <h1>3D MAZE CUBE</h1>
       <p>WEBGPU POWERED PHYSICS MAZE</p>
@@ -22,7 +29,7 @@ async function init() {
         </div>
       </div>
     </div>
-    <div class="instructions">DRAG TO ROTATE • SCROLL TO ZOOM</div>
+    <div class="instructions">DRAG TO ORBIT • SCROLL TO ZOOM</div>
   `;
 
   // --- Rapier Physics Setup ---
@@ -81,7 +88,8 @@ async function init() {
 
   function addWall(px: number, py: number, pz: number, size: [number, number, number]) {
     const geometry = new THREE.BoxGeometry(...size);
-    const mesh = new THREE.Mesh(geometry, wallMaterial);
+    // Clone material so we can fade walls independently
+    const mesh = new THREE.Mesh(geometry, wallMaterial.clone());
     mesh.position.set(px, py, pz);
     mazeGroup.add(mesh);
 
@@ -161,105 +169,133 @@ async function init() {
     .setRestitutionCombineRule(RAPIER.CoefficientCombineRule.Min);
   world.createCollider(ballColliderDesc, ballBody);
 
-  // --- Interaction ---
-  const raycaster = new THREE.Raycaster();
-  const mouse = new THREE.Vector2();
-  let isDragging = false;
-  let previousMouseX = 0;
-  let previousMouseY = 0;
+  // --- X-Ray Silhouette ---
+  const ballSilhouetteMat = new THREE.MeshBasicMaterial({ 
+    color: 0x00f2fe, 
+    transparent: true,
+    opacity: 0.5,
+    depthFunc: THREE.GreaterDepth, 
+    depthWrite: false 
+  });
+  const ballSilhouetteMesh = new THREE.Mesh(ballGeo, ballSilhouetteMat);
+  scene.add(ballSilhouetteMesh);
+
+  // --- Controls & Interaction ---
+  const controls = new OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.05;
+  controls.rotateSpeed = 0.8;
+  controls.enablePan = false;
+  controls.minDistance = 5;
+  controls.maxDistance = 25;
+
   const targetQuaternion = new THREE.Quaternion();
+  const currentTilt = { x: 0, z: 0 };
+  const keys = { w: false, a: false, s: false, d: false, ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false };
 
-  const updateMouse = (e: MouseEvent) => {
-    mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
-    mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
-  };
-
-  window.addEventListener('mousedown', (e) => {
-    updateMouse(e);
-    raycaster.setFromCamera(mouse, camera);
-    const intersects = raycaster.intersectObject(outerCube);
-    if (intersects.length > 0) {
-      isDragging = true;
-      previousMouseX = e.clientX;
-      previousMouseY = e.clientY;
-      document.body.style.cursor = 'grabbing';
-    }
+  window.addEventListener('keydown', (e) => {
+    if (e.key in keys) keys[e.key as keyof typeof keys] = true;
+  });
+  window.addEventListener('keyup', (e) => {
+    if (e.key in keys) keys[e.key as keyof typeof keys] = false;
   });
 
-  window.addEventListener('mousemove', (e) => {
-    updateMouse(e);
-    
-    if (!isDragging) {
-      raycaster.setFromCamera(mouse, camera);
-      const intersects = raycaster.intersectObject(outerCube);
-      if (intersects.length > 0) {
-        document.body.style.cursor = 'grab';
-      } else {
-        document.body.style.cursor = 'default';
+  // Device Orientation for Mobile
+  let useGyro = false;
+  const startOverlay = document.querySelector<HTMLDivElement>('#startOverlay')!;
+  const startBtn = document.querySelector<HTMLButtonElement>('#startBtn')!;
+
+  startBtn.addEventListener('click', async () => {
+    // Request permission for iOS
+    // @ts-ignore
+    if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+      try {
+        // @ts-ignore
+        const permission = await DeviceOrientationEvent.requestPermission();
+        if (permission === 'granted') useGyro = true;
+      } catch (err) {
+        console.error(err);
       }
-      return;
+    } else {
+      useGyro = true; // Non-iOS or older devices
     }
-
-    const deltaX = e.clientX - previousMouseX;
-    const deltaY = e.clientY - previousMouseY;
-
-    const rotateSpeed = 0.005;
-    const axisY = new THREE.Vector3(0, 1, 0).applyQuaternion(camera.quaternion);
-    const axisX = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
     
-    const quatY = new THREE.Quaternion().setFromAxisAngle(axisY, deltaX * rotateSpeed);
-    const quatX = new THREE.Quaternion().setFromAxisAngle(axisX, deltaY * rotateSpeed);
-    
-    targetQuaternion.premultiply(quatY).premultiply(quatX);
-    targetQuaternion.normalize();
-
-    previousMouseX = e.clientX;
-    previousMouseY = e.clientY;
+    startOverlay.classList.add('hidden');
   });
 
-  window.addEventListener('mouseup', (e) => {
-    isDragging = false;
-    document.body.style.cursor = 'default';
-    
-    updateMouse(e);
-    raycaster.setFromCamera(mouse, camera);
-    const intersects = raycaster.intersectObject(outerCube);
-    if (intersects.length > 0) {
-      document.body.style.cursor = 'grab';
-    }
+  window.addEventListener('deviceorientation', (e) => {
+    if (!useGyro) return;
+    // Map beta (-180 to 180) and gamma (-90 to 90) to tilt
+    // We'll use a sensitivity factor
+    const sens = 0.02;
+    currentTilt.x = (e.beta || 0) * sens;
+    currentTilt.z = -(e.gamma || 0) * sens;
   });
 
-  // --- Zoom Logic ---
+  // --- Visibility Logic Helpers ---
+  const raycaster = new THREE.Raycaster();
+
+  function updateVisibility() {
+    // 1. Raycast for transparency (Ball obstruction)
+    const direction = new THREE.Vector3().subVectors(ballMesh.position, camera.position).normalize();
+    raycaster.set(camera.position, direction);
+
+    // 2. Front-face fading (Outer faces)
+    // We'll also fade walls that are simply facing the camera to keep the "front" open
+    /*const cameraDir = new THREE.Vector3();
+    camera.getWorldDirection(cameraDir);
+    const intersects = raycaster.intersectObjects(mazeGroup.children, true);
+    const toBallDist = camera.position.distanceTo(ballMesh.position);
+
+    mazeGroup.children.forEach(obj => {
+      if (!(obj instanceof THREE.Mesh) || obj === outerCube) return;
+      
+      const mat = obj.material as THREE.MeshStandardMaterial;
+      let targetOpacity = 1.0;
+
+      // Check if it blocks the ball
+      const isBlocking = intersects.some(intersect => intersect.object === obj && intersect.distance < toBallDist);
+      
+      // Check if it's a front-facing wall (using dot product of normal and camera direction)
+      // For a box, we can just check if it's on the "near" side of the cube
+      const localPos = obj.position.clone();
+      const worldPos = obj.localToWorld(localPos.clone());
+      const toCamera = new THREE.Vector3().subVectors(camera.position, worldPos).normalize();
+      
+      // If the wall is between the camera and the center of the maze and facing camera
+      const isFront = toCamera.dot(worldPos.normalize()) > 0.5;
+
+      if (isBlocking) {
+        targetOpacity = 0.1;
+      } else if (isFront) {
+        targetOpacity = 0.3;
+      }
+
+      mat.transparent = targetOpacity < 1.0;
+      mat.opacity = THREE.MathUtils.lerp(mat.opacity, targetOpacity, 0.1);
+    });*/
+
+    /*// 3. Camera Auto-Follow
+    // If the ball is moving towards a face that's hidden or far, gently orbit
+    const ballPos = ballMesh.position.clone();
+    const ballDist = ballPos.length();
+    if (ballDist > 1) { // Only follow if ball isn't at the very center
+      const idealCameraDir = ballPos.clone().normalize();
+      const currentCameraDir = new THREE.Vector3().subVectors(camera.position, controls.target).normalize();
+      
+      // If the angle between ball and camera is too large, nudge the camera
+      if (idealCameraDir.angleTo(currentCameraDir) > Math.PI / 2.5) {
+        const followSpeed = 0.005;
+        const targetPos = idealCameraDir.multiplyScalar(camera.position.length());
+        camera.position.lerp(targetPos, followSpeed);
+      }
+    }*/
+  }
+
   const zoomRange = document.querySelector<HTMLInputElement>('#zoomRange')!;
-  
-  const updateZoom = (value: number) => {
-    camera.position.z = value;
-    zoomRange.value = value.toString();
-  };
-
   zoomRange.addEventListener('input', (e) => {
-    updateZoom(parseFloat((e.target as HTMLInputElement).value));
+    controls.object.position.setLength(parseFloat((e.target as HTMLInputElement).value));
   });
-
-  window.addEventListener('wheel', (e) => {
-    // Prevent browser zoom on pinch (ctrlKey is true for pinch on trackpads)
-    if (e.ctrlKey) {
-      e.preventDefault();
-    }
-    
-    // Normalize delta based on deltaMode (0: pixel, 1: line, 2: page)
-    let delta = e.deltaY;
-    if (e.deltaMode === 1) delta *= 20; // line
-    if (e.deltaMode === 2) delta *= 100; // page
-
-    // Adjust sensitivity: pinch vs scroll
-    const factor = e.ctrlKey ? 0.02 : 0.005;
-    const finalDelta = delta * factor;
-    
-    let newZoom = camera.position.z + finalDelta;
-    newZoom = Math.max(5, Math.min(25, newZoom));
-    updateZoom(newZoom);
-  }, { passive: false });
 
   // --- Stats.js Setup ---
   const stats = new Stats();
@@ -283,6 +319,27 @@ async function init() {
   function animate() {
     requestAnimationFrame(animate);
 
+    // Update Maze Tilt from Keyboard
+    const tiltSpeed = 0.02;
+    if (keys.w || keys.ArrowUp) currentTilt.x -= tiltSpeed;
+    if (keys.s || keys.ArrowDown) currentTilt.x += tiltSpeed;
+    if (keys.a || keys.ArrowLeft) currentTilt.z -= tiltSpeed;
+    if (keys.d || keys.ArrowRight) currentTilt.z += tiltSpeed;
+
+    // Apply limits and damping to tilt
+    currentTilt.x = THREE.MathUtils.clamp(currentTilt.x, -0.5, 0.5);
+    currentTilt.z = THREE.MathUtils.clamp(currentTilt.z, -0.5, 0.5);
+    
+    // Smoothly return to 0 if no keys pressed AND not using gyro
+    if (!useGyro) {
+      if (!keys.w && !keys.s && !keys.ArrowUp && !keys.ArrowDown) currentTilt.x *= 0.9;
+      if (!keys.a && !keys.d && !keys.ArrowLeft && !keys.ArrowRight) currentTilt.z *= 0.9;
+    }
+
+    const qX = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), currentTilt.x);
+    const qZ = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), currentTilt.z);
+    targetQuaternion.copy(qX).multiply(qZ);
+
     // Update Maze Rotation
     mazeGroup.quaternion.slerp(targetQuaternion, 0.1);
 
@@ -298,8 +355,18 @@ async function init() {
     ballMesh.position.set(ballPos.x, ballPos.y, ballPos.z);
     ballMesh.quaternion.set(ballRot.x, ballRot.y, ballRot.z, ballRot.w);
 
+    // Sync Silhouette
+    ballSilhouetteMesh.position.copy(ballMesh.position);
+
+    // Visibility Tricks
+    updateVisibility();
+
+    controls.update();
     renderer.render(scene, camera);
     stats.update();
+
+    // Sync Zoom UI
+    zoomRange.value = camera.position.length().toString();
   }
 
   window.addEventListener('resize', () => {
