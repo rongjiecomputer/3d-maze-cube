@@ -59,6 +59,10 @@ async function init() {
   dirLight.position.set(5, 10, 7.5);
   scene.add(dirLight);
 
+  const dirLight2 = new THREE.DirectionalLight(0xffffff, 0.5);
+  dirLight2.position.set(0, 10, 0);
+  scene.add(dirLight2);
+
   // --- Maze Creation ---
   const mazeSize = 5;
   const cellSize = 2;
