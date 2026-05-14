@@ -147,7 +147,7 @@ async function init() {
   outerColliderDesc.forEach(desc => world.createCollider(desc, mazeBody));
 
   // --- Ball Creation ---
-  const ballRadius = 0.4;
+  const ballRadius = 0.8;
   const ballGeo = new THREE.SphereGeometry(ballRadius, 32, 32);
   const ballMat = new THREE.MeshStandardMaterial({ 
     color: 0x8888ff, 
@@ -164,7 +164,7 @@ async function init() {
     .setAngularDamping(0.5);
   const ballBody = world.createRigidBody(ballBodyDesc);
   const ballColliderDesc = RAPIER.ColliderDesc.ball(ballRadius)
-    .setDensity(5.0)
+    .setDensity(10.0)
     .setRestitution(0.0)
     .setRestitutionCombineRule(RAPIER.CoefficientCombineRule.Min);
   world.createCollider(ballColliderDesc, ballBody);
