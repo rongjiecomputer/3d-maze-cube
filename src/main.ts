@@ -162,71 +162,31 @@ async function init() {
   world.createCollider(ballColliderDesc, ballBody);
 
   // --- Interaction ---
-  const raycaster = new THREE.Raycaster();
-  const mouse = new THREE.Vector2();
   let isDragging = false;
   let previousMouseX = 0;
   let previousMouseY = 0;
-  const targetQuaternion = new THREE.Quaternion();
-
-  const updateMouse = (e: MouseEvent) => {
-    mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
-    mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
-  };
+  const rotation = new THREE.Euler(0, 0, 0);
 
   window.addEventListener('mousedown', (e) => {
-    updateMouse(e);
-    raycaster.setFromCamera(mouse, camera);
-    const intersects = raycaster.intersectObject(outerCube);
-    if (intersects.length > 0) {
-      isDragging = true;
-      previousMouseX = e.clientX;
-      previousMouseY = e.clientY;
-      document.body.style.cursor = 'grabbing';
-    }
+    isDragging = true;
+    previousMouseX = e.clientX;
+    previousMouseY = e.clientY;
   });
 
   window.addEventListener('mousemove', (e) => {
-    updateMouse(e);
-    
-    if (!isDragging) {
-      raycaster.setFromCamera(mouse, camera);
-      const intersects = raycaster.intersectObject(outerCube);
-      if (intersects.length > 0) {
-        document.body.style.cursor = 'grab';
-      } else {
-        document.body.style.cursor = 'default';
-      }
-      return;
-    }
-
+    if (!isDragging) return;
     const deltaX = e.clientX - previousMouseX;
     const deltaY = e.clientY - previousMouseY;
 
-    const rotateSpeed = 0.005;
-    const axisY = new THREE.Vector3(0, 1, 0).applyQuaternion(camera.quaternion);
-    const axisX = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
-    
-    const quatY = new THREE.Quaternion().setFromAxisAngle(axisY, deltaX * rotateSpeed);
-    const quatX = new THREE.Quaternion().setFromAxisAngle(axisX, deltaY * rotateSpeed);
-    
-    targetQuaternion.premultiply(quatY).premultiply(quatX);
-    targetQuaternion.normalize();
+    rotation.y += deltaX * 0.005;
+    rotation.x += deltaY * 0.005;
 
     previousMouseX = e.clientX;
     previousMouseY = e.clientY;
   });
 
-  window.addEventListener('mouseup', (e) => {
+  window.addEventListener('mouseup', () => {
     isDragging = false;
-    document.body.style.cursor = 'default';
-    
-    updateMouse(e);
-    raycaster.setFromCamera(mouse, camera);
-    const intersects = raycaster.intersectObject(outerCube);
-    if (intersects.length > 0) {
-      document.body.style.cursor = 'grab';
-    }
   });
 
   // --- Zoom Logic ---
@@ -284,6 +244,7 @@ async function init() {
     requestAnimationFrame(animate);
 
     // Update Maze Rotation
+    const targetQuaternion = new THREE.Quaternion().setFromEuler(rotation);
     mazeGroup.quaternion.slerp(targetQuaternion, 0.1);
 
     // Sync Rapier Kinematic Body
