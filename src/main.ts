@@ -2,7 +2,7 @@ import './style.css';
 import * as THREE from 'three';
 // @ts-ignore
 import { WebGPURenderer } from 'three/webgpu';
-import { Maze3D } from './maze';
+import { HollowMaze3D } from './maze';
 // @ts-ignore
 import * as RAPIER from '@dimforge/rapier3d';
 import Stats from 'stats.js';
@@ -62,7 +62,7 @@ async function init() {
   const mazeSize = 5;
   const cellSize = 2;
   const wallThickness = 0.2;
-  const maze = new Maze3D(mazeSize);
+  const maze = new HollowMaze3D(mazeSize);
 
   const mazeGroup = new THREE.Group();
   scene.add(mazeGroup);
