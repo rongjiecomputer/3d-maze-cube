@@ -82,7 +82,6 @@ async function init() {
 
   // --- Audio Setup ---
   const metalThud = new Tone.MetalSynth({
-    frequency: 150,
     envelope: {
       attack: 0.001,
       decay: 0.1,
