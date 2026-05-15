@@ -25,6 +25,10 @@ async function init() {
             <label for="startSize">MAZE SIZE: <span id="sizeValue">5</span></label>
             <input type="range" id="startSize" min="3" max="8" step="1" value="5" style="width: 250px;">
           </div>
+          <div class="control-item">
+            <label for="startVolume">VOLUME</label>
+            <input type="range" id="startVolume" min="0" max="1" step="0.01" value="0.5" style="width: 250px;">
+          </div>
           <button id="startBtn" class="btn">START GAME</button>
         </div>
       </div>
@@ -34,8 +38,15 @@ async function init() {
     const sizeValue = document.querySelector<HTMLSpanElement>('#sizeValue')!;
     const startBtn = document.querySelector<HTMLButtonElement>('#startBtn')!;
 
+    const startVolume = document.querySelector<HTMLInputElement>('#startVolume')!;
+    startVolume.value = localStorage.getItem('audioVolume') || '0.5';
+
     startSize.addEventListener('input', () => {
       sizeValue.textContent = startSize.value;
+    });
+
+    startVolume.addEventListener('input', () => {
+      localStorage.setItem('audioVolume', startVolume.value);
     });
 
     startBtn.addEventListener('click', () => {
@@ -63,6 +74,10 @@ async function init() {
         </div>
         <div class="control-item">
           <button id="audioToggle" class="toggle-btn active">AUDIO: ON</button>
+        </div>
+        <div class="control-item">
+          <label for="volumeRange">VOLUME</label>
+          <input type="range" id="volumeRange" min="0" max="1" step="0.01" value="0.5">
         </div>
       </div>
     </div>
@@ -97,10 +112,17 @@ async function init() {
 
   let audioStarted = false;
   let audioEnabled = localStorage.getItem('audioEnabled') !== 'false';
+  let audioVolume = parseFloat(localStorage.getItem('audioVolume') || '0.5');
 
   const audioToggle = document.querySelector<HTMLButtonElement>('#audioToggle')!;
+  const volumeRange = document.querySelector<HTMLInputElement>('#volumeRange')!;
+
   audioToggle.textContent = `AUDIO: ${audioEnabled ? 'ON' : 'OFF'}`;
   audioToggle.classList.toggle('active', audioEnabled);
+  volumeRange.value = audioVolume.toString();
+
+  // Set initial volume
+  Tone.getDestination().volume.value = Tone.gainToDb(audioVolume);
 
   audioToggle.addEventListener('click', () => {
     audioEnabled = !audioEnabled;
@@ -113,6 +135,12 @@ async function init() {
         audioStarted = true;
       });
     }
+  });
+
+  volumeRange.addEventListener('input', () => {
+    audioVolume = parseFloat(volumeRange.value);
+    localStorage.setItem('audioVolume', audioVolume.toString());
+    Tone.getDestination().volume.value = Tone.gainToDb(audioVolume);
   });
 
   window.addEventListener('pointerdown', async () => {
