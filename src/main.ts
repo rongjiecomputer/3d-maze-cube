@@ -55,7 +55,7 @@ async function init() {
       <div class="controls">
         <div class="control-item">
           <label for="zoomRange">ZOOM</label>
-          <input type="range" id="zoomRange" min="5" max="25" step="0.1" value="12">
+          <input type="range" id="zoomRange" step="0.1">
         </div>
         <div class="control-item">
           <label for="mazeSizeRange">MAZE SIZE: ${mazeSize}</label>
@@ -126,8 +126,15 @@ async function init() {
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x0a0a0c);
 
-  const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-  camera.position.set(0, 0, 12);
+  const cellSize = 2;
+  const wallThickness = 0.2;
+  const outerSize = mazeSize * cellSize + wallThickness;
+  const targetScreenHeightFrac = 0.6;
+  const fov = 75;
+  const initialZoom = outerSize / targetScreenHeightFrac;
+
+  const camera = new THREE.PerspectiveCamera(fov, window.innerWidth / window.innerHeight, 0.1, 1000);
+  camera.position.set(0, 0, initialZoom);
 
   // @ts-ignore
   const renderer = new WebGPURenderer({ antialias: true });
@@ -150,8 +157,6 @@ async function init() {
   scene.add(dirLight2);
 
   // --- Maze Creation ---
-  const cellSize = 2;
-  const wallThickness = 0.2;
   const maze = new HollowMaze3D(mazeSize);
 
   const mazeGroup = new THREE.Group();
@@ -206,7 +211,6 @@ async function init() {
   });
 
   // Translucent Outer Cube
-  const outerSize = mazeSize * cellSize + wallThickness;
   const outerGeo = new THREE.BoxGeometry(outerSize, outerSize, outerSize);
   const outerMat = new THREE.MeshPhysicalMaterial({
     color: 0xffffff,
@@ -267,8 +271,8 @@ async function init() {
   scene.add(ballSilhouetteMesh);
 
   // --- Interaction (Virtual Trackball) ---
-  const proxyCamera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-  proxyCamera.position.set(0, 0, 12);
+  const proxyCamera = new THREE.PerspectiveCamera(fov, window.innerWidth / window.innerHeight, 0.1, 1000);
+  proxyCamera.position.set(0, 0, initialZoom);
   
   const controls = new TrackballControls(proxyCamera, renderer.domElement);
   controls.rotateSpeed = 4.0;
@@ -290,6 +294,9 @@ async function init() {
 
   // Sync zoom slider with controls
   const zoomRange = document.querySelector<HTMLInputElement>('#zoomRange')!;
+  zoomRange.min = (initialZoom * 0.4).toFixed(1);
+  zoomRange.max = (initialZoom * 2.5).toFixed(1);
+  zoomRange.value = initialZoom.toFixed(1);
   
   const updateZoom = (value: number) => {
     proxyCamera.position.normalize().multiplyScalar(value);
