@@ -274,12 +274,10 @@ async function init() {
   proxyCamera.position.set(0, 0, initialZoom);
   
   const controls = new TrackballControls(proxyCamera, renderer.domElement);
-  controls.rotateSpeed = 4.0;
+  controls.rotateSpeed = 3.0;
   controls.zoomSpeed = 1.2;
-  controls.panSpeed = 0.8;
   controls.noZoom = false;
   controls.noPan = true;
-  controls.staticMoving = true;
   controls.dynamicDampingFactor = 0.3;
 
   // --- Visibility Logic Helpers ---
