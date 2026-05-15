@@ -1,5 +1,6 @@
 import './style.css';
 import * as THREE from 'three';
+import * as Tone from 'tone';
 // @ts-ignore
 import { WebGPURenderer } from 'three/webgpu';
 import { HollowMaze3D } from './maze';
@@ -35,6 +36,30 @@ async function init() {
   const gravity = { x: 0.0, y: -9.81, z: 0.0 };
   // @ts-ignore
   const world = new RAPIER.World(gravity);
+  const eventQueue = new RAPIER.EventQueue(true);
+
+  // --- Audio Setup ---
+  const metalThud = new Tone.MetalSynth({
+    frequency: 150,
+    envelope: {
+      attack: 0.001,
+      decay: 0.1,
+      release: 0.1
+    },
+    harmonicity: 5.1,
+    modulationIndex: 32,
+    resonance: 800,
+    octaves: 1.5
+  }).toDestination();
+  metalThud.volume.value = -12;
+
+  let audioStarted = false;
+  window.addEventListener('pointerdown', async () => {
+    if (!audioStarted) {
+      await Tone.start();
+      audioStarted = true;
+    }
+  });
 
   // --- Three.js Setup ---
   const scene = new THREE.Scene();
@@ -166,6 +191,7 @@ async function init() {
   const ballColliderDesc = RAPIER.ColliderDesc.ball(ballRadius)
     .setDensity(10.0)
     .setRestitution(0.0)
+    .setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS)
     .setRestitutionCombineRule(RAPIER.CoefficientCombineRule.Min);
   world.createCollider(ballColliderDesc, ballBody);
 
@@ -265,7 +291,19 @@ async function init() {
     mazeBody.setNextKinematicRotation(mazeGroup.quaternion);
     
     // Step Physics
-    world.step();
+    world.step(eventQueue);
+
+    eventQueue.drainCollisionEvents((handle1, handle2, started) => {
+      if (started && audioStarted) {
+        // Calculate the impact strength based on ball velocity
+        const velocity = ballBody.linvel();
+        const speed = Math.sqrt(velocity.x**2 + velocity.y**2 + velocity.z**2);
+        
+        // Map speed to volume (0.0 to 1.0)
+        const volume = Math.min(speed / 10, 1);
+        metalThud.triggerAttackRelease("C1", "32n", undefined, volume);
+      }
+    });
 
     // Sync Ball
     const ballPos = ballBody.translation();
