@@ -12,6 +12,41 @@ import { TrackballControls } from 'three/examples/jsm/controls/TrackballControls
 async function init() {
   // --- UI Setup ---
   const app = document.querySelector<HTMLDivElement>('#app')!;
+  const urlParams = new URLSearchParams(window.location.search);
+  const sizeParam = urlParams.get('size');
+
+  if (!sizeParam) {
+    app.innerHTML = `
+      <div class="start-screen">
+        <div class="start-content">
+          <h1>3D MAZE CUBE</h1>
+          <p>CHOOSE YOUR MAZE SIZE</p>
+          <div class="control-item">
+            <label for="startSize">MAZE SIZE: <span id="sizeValue">5</span></label>
+            <input type="range" id="startSize" min="3" max="8" step="1" value="5" style="width: 250px;">
+          </div>
+          <button id="startBtn" class="btn">START GAME</button>
+        </div>
+      </div>
+    `;
+
+    const startSize = document.querySelector<HTMLInputElement>('#startSize')!;
+    const sizeValue = document.querySelector<HTMLSpanElement>('#sizeValue')!;
+    const startBtn = document.querySelector<HTMLButtonElement>('#startBtn')!;
+
+    startSize.addEventListener('input', () => {
+      sizeValue.textContent = startSize.value;
+    });
+
+    startBtn.addEventListener('click', () => {
+      window.location.search = `?size=${startSize.value}`;
+    });
+
+    return;
+  }
+
+  const mazeSize = parseInt(sizeParam);
+
   app.innerHTML = `
     <div class="ui">
       <h1>3D MAZE CUBE</h1>
@@ -21,6 +56,13 @@ async function init() {
         <div class="control-item">
           <label for="zoomRange">ZOOM</label>
           <input type="range" id="zoomRange" min="5" max="25" step="0.1" value="12">
+        </div>
+        <div class="control-item">
+          <label for="mazeSizeRange">MAZE SIZE: ${mazeSize}</label>
+          <input type="range" id="mazeSizeRange" min="3" max="8" step="1" value="${mazeSize}">
+        </div>
+        <div class="control-item">
+          <button id="audioToggle" class="toggle-btn active">AUDIO: ON</button>
         </div>
       </div>
     </div>
@@ -54,8 +96,27 @@ async function init() {
   metalThud.volume.value = -12;
 
   let audioStarted = false;
+  let audioEnabled = localStorage.getItem('audioEnabled') !== 'false';
+
+  const audioToggle = document.querySelector<HTMLButtonElement>('#audioToggle')!;
+  audioToggle.textContent = `AUDIO: ${audioEnabled ? 'ON' : 'OFF'}`;
+  audioToggle.classList.toggle('active', audioEnabled);
+
+  audioToggle.addEventListener('click', () => {
+    audioEnabled = !audioEnabled;
+    localStorage.setItem('audioEnabled', audioEnabled.toString());
+    audioToggle.textContent = `AUDIO: ${audioEnabled ? 'ON' : 'OFF'}`;
+    audioToggle.classList.toggle('active', audioEnabled);
+    
+    if (audioEnabled && !audioStarted) {
+      Tone.start().then(() => {
+        audioStarted = true;
+      });
+    }
+  });
+
   window.addEventListener('pointerdown', async () => {
-    if (!audioStarted) {
+    if (audioEnabled && !audioStarted) {
       await Tone.start();
       audioStarted = true;
     }
@@ -89,7 +150,6 @@ async function init() {
   scene.add(dirLight2);
 
   // --- Maze Creation ---
-  const mazeSize = 5;
   const cellSize = 2;
   const wallThickness = 0.2;
   const maze = new HollowMaze3D(mazeSize);
@@ -240,6 +300,19 @@ async function init() {
     updateZoom(parseFloat((e.target as HTMLInputElement).value));
   });
 
+  const mazeSizeRange = document.querySelector<HTMLInputElement>('#mazeSizeRange')!;
+  mazeSizeRange.addEventListener('change', (e) => {
+    const newSize = (e.target as HTMLInputElement).value;
+    if (newSize !== mazeSize.toString()) {
+      const confirmRestart = confirm("Changing maze size will restart the game. Proceed?");
+      if (confirmRestart) {
+        window.location.search = `?size=${newSize}`;
+      } else {
+        mazeSizeRange.value = mazeSize.toString();
+      }
+    }
+  });
+
   // Track initial rotation state if needed, but TrackballControls handles it.
 
   window.addEventListener('wheel', (e) => {
@@ -293,8 +366,8 @@ async function init() {
     // Step Physics
     world.step(eventQueue);
 
-    eventQueue.drainCollisionEvents((handle1, handle2, started) => {
-      if (started && audioStarted) {
+    eventQueue.drainCollisionEvents((_handle1, _handle2, started) => {
+      if (started && audioStarted && audioEnabled) {
         // Calculate the impact strength based on ball velocity
         const velocity = ballBody.linvel();
         const speed = Math.sqrt(velocity.x**2 + velocity.y**2 + velocity.z**2);
