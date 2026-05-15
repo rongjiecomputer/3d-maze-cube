@@ -2,6 +2,8 @@
 
 3D Maze Cube game with **WebGPU (Three.js)**, **Physics (Rapier.js)** and **Audio (Tone.js)**.
 
+<https://3d-maze-cube.netlify.app>
+
 ## Key Features
 - **Procedural 3D Maze**: A recursive backtracker algorithm generates a unique 3D maze structure every time the game starts.
 - **WebGPU Rendering**: Utilizes Three.js `WebGPURenderer` for high-performance, modern web graphics.
