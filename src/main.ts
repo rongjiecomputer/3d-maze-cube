@@ -78,6 +78,7 @@ async function init() {
   const gravity = { x: 0.0, y: -9.81, z: 0.0 };
   // @ts-ignore
   const world = new RAPIER.World(gravity);
+  world.integrationParameters.maxCcdSubsteps = 5;
   const eventQueue = new RAPIER.EventQueue(true);
 
   // --- Audio Setup ---
@@ -224,13 +225,19 @@ async function init() {
   mazeGroup.add(outerCube);
 
   // Add outer boundary colliders (Rapier)
+  // We make these much thicker than the visual walls to prevent tunneling at high speeds
+  const bThick = 5.0; 
+  const bOffset = bThick/2 - wallThickness/2;
+  const hSize = outerSize/2;
+
   const outerColliderDesc = [
-    RAPIER.ColliderDesc.cuboid(outerSize/2, wallThickness/2, outerSize/2).setTranslation(0, outerSize/2, 0),
-    RAPIER.ColliderDesc.cuboid(outerSize/2, wallThickness/2, outerSize/2).setTranslation(0, -outerSize/2, 0),
-    RAPIER.ColliderDesc.cuboid(wallThickness/2, outerSize/2, outerSize/2).setTranslation(outerSize/2, 0, 0),
-    RAPIER.ColliderDesc.cuboid(wallThickness/2, outerSize/2, outerSize/2).setTranslation(-outerSize/2, 0, 0),
-    RAPIER.ColliderDesc.cuboid(outerSize/2, outerSize/2, wallThickness/2).setTranslation(0, 0, outerSize/2),
-    RAPIER.ColliderDesc.cuboid(outerSize/2, outerSize/2, wallThickness/2).setTranslation(0, 0, -outerSize/2),
+    // Overlap the dimensions (hSize + bThick) to ensure corners are perfectly sealed
+    RAPIER.ColliderDesc.cuboid(hSize + bThick, bThick/2, hSize + bThick).setTranslation(0, hSize + bOffset, 0),
+    RAPIER.ColliderDesc.cuboid(hSize + bThick, bThick/2, hSize + bThick).setTranslation(0, -(hSize + bOffset), 0),
+    RAPIER.ColliderDesc.cuboid(bThick/2, hSize + bThick, hSize + bThick).setTranslation(hSize + bOffset, 0, 0),
+    RAPIER.ColliderDesc.cuboid(bThick/2, hSize + bThick, hSize + bThick).setTranslation(-(hSize + bOffset), 0, 0),
+    RAPIER.ColliderDesc.cuboid(hSize + bThick, hSize + bThick, bThick/2).setTranslation(0, 0, hSize + bOffset),
+    RAPIER.ColliderDesc.cuboid(hSize + bThick, hSize + bThick, bThick/2).setTranslation(0, 0, -(hSize + bOffset)),
   ];
   outerColliderDesc.forEach(desc => world.createCollider(desc, mazeBody));
 
@@ -249,7 +256,8 @@ async function init() {
     .setTranslation(offset, offset, offset)
     .setCanSleep(false)
     .setLinearDamping(0.3)
-    .setAngularDamping(1.0);
+    .setAngularDamping(1.0)
+    .setCcdEnabled(true);
   const ballBody = world.createRigidBody(ballBodyDesc);
   const ballColliderDesc = RAPIER.ColliderDesc.ball(ballRadius)
     .setDensity(7000.0)
@@ -393,6 +401,23 @@ async function init() {
 
     // Visibility Tricks
     updateVisibility();
+
+    // Limit Max Velocity
+    const maxVelocity = 10.0;
+    const velocity = ballBody.linvel();
+    const speed = Math.sqrt(velocity.x ** 2 + velocity.y ** 2 + velocity.z ** 2);
+
+    if (speed > maxVelocity) {
+      const ratio = maxVelocity / speed;
+      ballBody.setLinvel(
+        { 
+          x: velocity.x * ratio, 
+          y: velocity.y * ratio, 
+          z: velocity.z * ratio 
+        }, 
+        true // wakeUp: true
+      );
+    }
 
     renderer.render(scene, camera);
     stats.update();
