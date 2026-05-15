@@ -8,6 +8,8 @@ export default defineConfig({
     topLevelAwait()
   ],
   build: {
-    target: 'esnext'
+    target: 'esnext',
+    minify: 'esbuild',
+    cssMinify: 'lightningcss', 
   }
 });
