@@ -1,8 +1,8 @@
 import './style.css';
 import * as THREE from 'three';
-import * as Tone from 'tone';
 // @ts-ignore
 import { WebGPURenderer } from 'three/webgpu';
+import { GameAudio } from './audio';
 import { HollowMaze3D } from './maze';
 // @ts-ignore
 import * as RAPIER from '@dimforge/rapier3d';
@@ -97,22 +97,10 @@ async function init() {
   const eventQueue = new RAPIER.EventQueue(true);
 
   // --- Audio Setup ---
-  const metalThud = new Tone.MetalSynth({
-    envelope: {
-      attack: 0.001,
-      decay: 0.1,
-      release: 0.1
-    },
-    harmonicity: 5.1,
-    modulationIndex: 32,
-    resonance: 800,
-    octaves: 1.5
-  }).toDestination();
-  metalThud.volume.value = -12;
-
-  let audioStarted = false;
   let audioEnabled = localStorage.getItem('audioEnabled') !== 'false';
   let audioVolume = parseFloat(localStorage.getItem('audioVolume') || '0.5');
+
+  const audio = new GameAudio(audioVolume, audioEnabled);
 
   const audioToggle = document.querySelector<HTMLButtonElement>('#audioToggle')!;
   const volumeRange = document.querySelector<HTMLInputElement>('#volumeRange')!;
@@ -121,33 +109,28 @@ async function init() {
   audioToggle.classList.toggle('active', audioEnabled);
   volumeRange.value = audioVolume.toString();
 
-  // Set initial volume
-  Tone.getDestination().volume.value = Tone.gainToDb(audioVolume);
-
   audioToggle.addEventListener('click', () => {
     audioEnabled = !audioEnabled;
     localStorage.setItem('audioEnabled', audioEnabled.toString());
     audioToggle.textContent = `AUDIO: ${audioEnabled ? 'ON' : 'OFF'}`;
     audioToggle.classList.toggle('active', audioEnabled);
-    
-    if (audioEnabled && !audioStarted) {
-      Tone.start().then(() => {
-        audioStarted = true;
-      });
-    }
+
+    audio.setEnabled(audioEnabled);
+    if (audioEnabled) audio.unlock();
   });
 
   volumeRange.addEventListener('input', () => {
     audioVolume = parseFloat(volumeRange.value);
     localStorage.setItem('audioVolume', audioVolume.toString());
-    Tone.getDestination().volume.value = Tone.gainToDb(audioVolume);
+    audio.setVolume(audioVolume);
   });
 
-  window.addEventListener('pointerdown', async () => {
-    if (audioEnabled && !audioStarted) {
-      await Tone.start();
-      audioStarted = true;
-    }
+  window.addEventListener('pointerdown', () => {
+    if (audioEnabled) audio.unlock();
+  });
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) audio.suspendRolling();
   });
 
   // --- Three.js Setup ---
@@ -292,7 +275,10 @@ async function init() {
     .setRestitution(0.0)
     .setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS)
     .setRestitutionCombineRule(RAPIER.CoefficientCombineRule.Min);
-  world.createCollider(ballColliderDesc, ballBody);
+  const ballCollider = world.createCollider(ballColliderDesc, ballBody);
+
+  // Colliders the ball is currently touching, for the rolling audio layer.
+  const contacts = new Set<number>();
 
     // --- X-Ray Silhouette ---
   const ballSilhouetteMat = new THREE.MeshBasicMaterial({ 
@@ -381,6 +367,8 @@ async function init() {
   });
 
   // --- Animation Loop ---
+  const prevVel = new THREE.Vector3();
+
   function animate() {
     requestAnimationFrame(animate);
 
@@ -403,20 +391,38 @@ async function init() {
     // Sync Rapier Kinematic Body
     mazeBody.setNextKinematicRotation(mazeGroup.quaternion);
     
+    // Sample velocity before stepping so we can measure the impact impulse.
+    const preVel = ballBody.linvel();
+    prevVel.set(preVel.x, preVel.y, preVel.z);
+
     // Step Physics
     world.step(eventQueue);
 
-    eventQueue.drainCollisionEvents((_handle1, _handle2, started) => {
-      if (started && audioStarted && audioEnabled) {
-        // Calculate the impact strength based on ball velocity
-        const velocity = ballBody.linvel();
-        const speed = Math.sqrt(velocity.x**2 + velocity.y**2 + velocity.z**2);
-        
-        // Map speed to volume (0.0 to 1.0)
-        const volume = Math.min(speed / 10, 1);
-        metalThud.triggerAttackRelease("C1", "32n", undefined, volume);
+    // Impact strength is the velocity lost during the step, not the velocity
+    // after it: with restitution 0 a hard hit ends up slower than a graze.
+    const postVel = ballBody.linvel();
+    const deltaV = Math.hypot(
+      postVel.x - prevVel.x,
+      postVel.y - prevVel.y,
+      postVel.z - prevVel.z
+    );
+    const impactEnergy = Math.min(Math.max((deltaV - 0.25) / 6, 0), 1);
+
+    audio.beginFrame();
+    eventQueue.drainCollisionEvents((handle1: number, handle2: number, started: boolean) => {
+      const other = handle1 === ballCollider.handle ? handle2 : handle1;
+      if (started) {
+        contacts.add(other);
+        audio.impact(impactEnergy, other);
+      } else {
+        contacts.delete(other);
       }
     });
+
+    // Rolling: surface speed of a rolling sphere is |angular velocity| * radius.
+    const angVel = ballBody.angvel();
+    const surfaceSpeed = Math.hypot(angVel.x, angVel.y, angVel.z) * ballRadius;
+    audio.updateRolling(surfaceSpeed, contacts.size > 0);
 
     // Sync Ball
     const ballPos = ballBody.translation();
